@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Watch Winder</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Watch Winder</h1>
+            <div id="connection-status" class="status-badge">Connecting...</div>
+        </header>
+
+        <!-- WiFi Setup Section (shown in AP mode) -->
+        <section id="wifi-setup" class="card hidden">
+            <h2>WiFi Setup</h2>
+            <p>Connect to your home WiFi network:</p>
+            <div class="form-group">
+                <label for="wifi-ssid">Network:</label>
+                <select id="wifi-ssid">
+                    <option value="">Scanning...</option>
+                </select>
+                <button type="button" onclick="scanWiFi()" class="btn-small">Refresh</button>
+            </div>
+            <div class="form-group">
+                <label for="wifi-password">Password:</label>
+                <input type="password" id="wifi-password" placeholder="WiFi Password">
+            </div>
+            <button onclick="connectWiFi()" class="btn-primary">Connect</button>
+        </section>
+
+        <!-- Global Controls -->
+        <section class="card">
+            <h2>Controls</h2>
+            <div class="button-group">
+                <button onclick="startAll()" class="btn-success">Start All</button>
+                <button onclick="stopAll()" class="btn-danger">Stop All</button>
+            </div>
+        </section>
+
+        <!-- Motor 1 -->
+        <section class="card motor-card">
+            <div class="motor-header">
+                <h2>Motor 1</h2>
+                <span id="motor1-status" class="status-indicator stopped">Stopped</span>
+            </div>
+
+            <div class="status-grid">
+                <div class="stat">
+                    <span class="stat-label">Cycles</span>
+                    <span id="motor1-cycles" class="stat-value">0/0</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Turns Today</span>
+                    <span id="motor1-turns" class="stat-value">0</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Next Cycle</span>
+                    <span id="motor1-next" class="stat-value">--</span>
+                </div>
+            </div>
+
+            <div class="settings-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Enabled</label>
+                        <label class="switch">
+                            <input type="checkbox" id="motor1-enabled" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>Direction</label>
+                        <select id="motor1-direction">
+                            <option value="0">Clockwise</option>
+                            <option value="1">Counter-Clockwise</option>
+                            <option value="2">Bidirectional</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Turns/Day (TPD)</label>
+                        <input type="number" id="motor1-tpd" value="650" min="100" max="2000">
+                    </div>
+                    <div class="form-group">
+                        <label>Active Hours</label>
+                        <input type="number" id="motor1-activeHours" value="12" min="1" max="24">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Rotation (sec)</label>
+                        <input type="number" id="motor1-rotationTime" value="10" min="1" max="60">
+                    </div>
+                    <div class="form-group">
+                        <label>Rest (min)</label>
+                        <input type="number" id="motor1-restTime" value="5" min="1" max="60">
+                    </div>
+                </div>
+
+                <div class="calculated-info">
+                    <span>Calculated: <span id="motor1-cycles-calc">--</span> cycles/day, <span id="motor1-turns-calc">--</span> turns/cycle</span>
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button onclick="startMotor(1)" class="btn-success btn-small">Start</button>
+                <button onclick="stopMotor(1)" class="btn-danger btn-small">Stop</button>
+                <button onclick="testMotor(1)" class="btn-secondary btn-small">Test</button>
+            </div>
+        </section>
+
+        <!-- Motor 2 -->
+        <section class="card motor-card">
+            <div class="motor-header">
+                <h2>Motor 2</h2>
+                <span id="motor2-status" class="status-indicator stopped">Stopped</span>
+            </div>
+
+            <div class="status-grid">
+                <div class="stat">
+                    <span class="stat-label">Cycles</span>
+                    <span id="motor2-cycles" class="stat-value">0/0</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Turns Today</span>
+                    <span id="motor2-turns" class="stat-value">0</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Next Cycle</span>
+                    <span id="motor2-next" class="stat-value">--</span>
+                </div>
+            </div>
+
+            <div class="settings-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Enabled</label>
+                        <label class="switch">
+                            <input type="checkbox" id="motor2-enabled" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>Direction</label>
+                        <select id="motor2-direction">
+                            <option value="0">Clockwise</option>
+                            <option value="1">Counter-Clockwise</option>
+                            <option value="2">Bidirectional</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Turns/Day (TPD)</label>
+                        <input type="number" id="motor2-tpd" value="650" min="100" max="2000">
+                    </div>
+                    <div class="form-group">
+                        <label>Active Hours</label>
+                        <input type="number" id="motor2-activeHours" value="12" min="1" max="24">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Rotation (sec)</label>
+                        <input type="number" id="motor2-rotationTime" value="10" min="1" max="60">
+                    </div>
+                    <div class="form-group">
+                        <label>Rest (min)</label>
+                        <input type="number" id="motor2-restTime" value="5" min="1" max="60">
+                    </div>
+                </div>
+
+                <div class="calculated-info">
+                    <span>Calculated: <span id="motor2-cycles-calc">--</span> cycles/day, <span id="motor2-turns-calc">--</span> turns/cycle</span>
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button onclick="startMotor(2)" class="btn-success btn-small">Start</button>
+                <button onclick="stopMotor(2)" class="btn-danger btn-small">Stop</button>
+                <button onclick="testMotor(2)" class="btn-secondary btn-small">Test</button>
+            </div>
+        </section>
+
+        <!-- Save Button -->
+        <section class="card">
+            <button onclick="saveSettings()" class="btn-primary full-width">Save Settings</button>
+        </section>
+
+        <!-- System Info -->
+        <section class="card">
+            <h2>System Info</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">IP Address:</span>
+                    <span id="system-ip" class="info-value">--</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Uptime:</span>
+                    <span id="system-uptime" class="info-value">--</span>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
