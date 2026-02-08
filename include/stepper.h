@@ -11,6 +11,12 @@ enum Direction {
     DIR_BIDIRECTIONAL = 2
 };
 
+// Motor state for non-blocking operation
+enum MotorState {
+    MOTOR_IDLE,
+    MOTOR_RUNNING
+};
+
 // Half-step sequence for 28BYJ-48 (smoother operation)
 const int STEP_SEQUENCE[8][4] = {
     {1, 0, 0, 0},
@@ -30,6 +36,13 @@ private:
     bool lastDirectionCW;  // For bidirectional mode
     unsigned long stepDelay;
 
+    // Non-blocking state
+    MotorState state;
+    bool currentDirection;
+    unsigned long targetEndTime;
+    unsigned long lastStepTime;
+    int totalSteps;
+
 public:
     Stepper(int in1, int in2, int in3, int in4) {
         pins[0] = in1;
@@ -39,6 +52,10 @@ public:
         currentStep = 0;
         lastDirectionCW = true;
         stepDelay = STEP_DELAY_MS;
+        state = MOTOR_IDLE;
+        totalSteps = 0;
+        lastStepTime = 0;
+        targetEndTime = 0;
     }
 
     void begin() {
@@ -54,11 +71,11 @@ public:
 
     void stepMotor(bool clockwise) {
         if (clockwise) {
-            currentStep++;
-            if (currentStep >= 8) currentStep = 0;
-        } else {
             currentStep--;
             if (currentStep < 0) currentStep = 7;
+        } else {
+            currentStep++;
+            if (currentStep >= 8) currentStep = 0;
         }
 
         for (int i = 0; i < 4; i++) {
@@ -67,70 +84,74 @@ public:
     }
 
     void stop() {
+        state = MOTOR_IDLE;
         // De-energize all coils to save power and reduce heat
         for (int i = 0; i < 4; i++) {
             digitalWrite(pins[i], LOW);
         }
     }
 
-    // Rotate a specific number of steps
-    void rotate(int steps, Direction dir) {
-        bool clockwise;
-
+    // Start a non-blocking rotation for a duration
+    void startRotation(int seconds, Direction dir) {
         if (dir == DIR_BIDIRECTIONAL) {
-            clockwise = !lastDirectionCW;
-            lastDirectionCW = clockwise;
+            currentDirection = !lastDirectionCW;
+            lastDirectionCW = currentDirection;
         } else {
-            clockwise = (dir == DIR_CLOCKWISE);
+            currentDirection = (dir == DIR_CLOCKWISE);
         }
 
-        for (int i = 0; i < steps; i++) {
-            stepMotor(clockwise);
-            delay(stepDelay);
-            yield();  // Allow ESP8266 background tasks
-        }
-
-        stop();
+        targetEndTime = millis() + (unsigned long)seconds * 1000;
+        lastStepTime = millis();
+        totalSteps = 0;
+        state = MOTOR_RUNNING;
     }
 
-    // Rotate for a specific number of full turns
-    void rotateTurns(float turns, Direction dir) {
-        // Half-stepping = 4096 steps per revolution
-        int steps = (int)(turns * 4096);
-        rotate(steps, dir);
-    }
-
-    // Rotate for a specific duration (seconds)
-    // Returns approximate number of turns completed
-    float rotateForDuration(int seconds, Direction dir) {
-        bool clockwise;
-
-        if (dir == DIR_BIDIRECTIONAL) {
-            clockwise = !lastDirectionCW;
-            lastDirectionCW = clockwise;
-        } else {
-            clockwise = (dir == DIR_CLOCKWISE);
+    // Call this from the main loop - non-blocking
+    // Returns true if motor is still running
+    bool update() {
+        if (state != MOTOR_RUNNING) {
+            return false;
         }
 
-        unsigned long startTime = millis();
-        unsigned long duration = (unsigned long)seconds * 1000;
-        int totalSteps = 0;
+        unsigned long now = millis();
 
-        while (millis() - startTime < duration) {
-            stepMotor(clockwise);
+        // Check if rotation time is complete
+        if (now >= targetEndTime) {
+            stop();
+            return false;
+        }
+
+        // Check if it's time for the next step
+        if (now - lastStepTime >= stepDelay) {
+            stepMotor(currentDirection);
             totalSteps++;
-            delay(stepDelay);
-            yield();  // Allow ESP8266 background tasks
+            lastStepTime = now;
         }
 
-        stop();
+        return true;
+    }
 
-        // Return turns completed (4096 half-steps per revolution)
-        return (float)totalSteps / 4096.0f;
+    // Check if motor is currently running
+    bool isRunning() {
+        return state == MOTOR_RUNNING;
+    }
+
+    // Get turns completed in current/last rotation
+    float getTurnsCompleted() {
+        return (float)totalSteps / (float)HALF_STEPS_PER_REVOLUTION;
     }
 
     bool getLastDirection() {
         return lastDirectionCW;
+    }
+
+    // Legacy blocking function - only use for testing if needed
+    float rotateForDurationBlocking(int seconds, Direction dir) {
+        startRotation(seconds, dir);
+        while (update()) {
+            yield();
+        }
+        return getTurnsCompleted();
     }
 };
 

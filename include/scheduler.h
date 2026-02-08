@@ -5,6 +5,13 @@
 #include "config.h"
 #include "stepper.h"
 
+// Scheduler state
+enum SchedulerState {
+    SCHED_IDLE,
+    SCHED_WAITING,      // Waiting for next cycle
+    SCHED_ROTATING      // Motor is currently rotating
+};
+
 // Motor settings structure
 struct MotorSettings {
     bool enabled;
@@ -29,6 +36,7 @@ private:
     float totalTurnsToday;
     bool isRunning;
     int motorId;
+    SchedulerState state;
 
 public:
     Scheduler(Stepper* stepper, int id) {
@@ -38,6 +46,7 @@ public:
         completedCycles = 0;
         totalTurnsToday = 0;
         isRunning = false;
+        state = SCHED_IDLE;
 
         // Initialize with defaults
         settings.enabled = true;
@@ -91,12 +100,16 @@ public:
 
     void start() {
         isRunning = true;
+        state = SCHED_WAITING;
         lastCycleTime = millis() - settings.cycleDurationMs;  // Trigger immediate first cycle
+        Serial.printf("Motor %d: Scheduler started\n", motorId);
     }
 
     void stop() {
         isRunning = false;
+        state = SCHED_IDLE;
         motor->stop();
+        Serial.printf("Motor %d: Scheduler stopped\n", motorId);
     }
 
     bool getRunning() {
@@ -116,7 +129,7 @@ public:
         totalTurnsToday = 0;
     }
 
-    // Call this in the main loop - non-blocking
+    // Call this in the main loop - NON-BLOCKING
     bool update() {
         if (!isRunning || !settings.enabled) {
             return false;
@@ -124,31 +137,47 @@ public:
 
         unsigned long currentTime = millis();
 
-        // Check if enough time has passed for next cycle
-        if (currentTime - lastCycleTime >= settings.cycleDurationMs) {
-            // Check if we've reached daily target
-            if (completedCycles >= settings.cyclesPerDay) {
-                return false;  // Done for today
-            }
+        switch (state) {
+            case SCHED_IDLE:
+                return false;
 
-            // Execute rotation
-            lastCycleTime = currentTime;
+            case SCHED_WAITING:
+                // Check if enough time has passed for next cycle
+                if (currentTime - lastCycleTime >= settings.cycleDurationMs) {
+                    // Check if we've reached daily target
+                    if (completedCycles >= settings.cyclesPerDay) {
+                        return false;  // Done for today
+                    }
 
-            // Rotate for the configured duration
-            float turnsCompleted = motor->rotateForDuration(settings.rotationTime,
-                                                            settings.direction);
+                    // Start the rotation (non-blocking)
+                    lastCycleTime = currentTime;
+                    motor->startRotation(settings.rotationTime, settings.direction);
+                    state = SCHED_ROTATING;
 
-            totalTurnsToday += turnsCompleted;
-            completedCycles++;
+                    Serial.printf("Motor %d: Starting cycle %d/%d\n",
+                                 motorId, completedCycles + 1, settings.cyclesPerDay);
+                }
+                return false;
 
-            Serial.printf("Motor %d: Cycle %d/%d, Turns this cycle: %.2f, Total: %.2f\n",
-                         motorId, completedCycles, settings.cyclesPerDay,
-                         turnsCompleted, totalTurnsToday);
+            case SCHED_ROTATING:
+                // Update motor (non-blocking step)
+                if (!motor->update()) {
+                    // Motor finished rotating
+                    float turnsCompleted = motor->getTurnsCompleted();
+                    totalTurnsToday += turnsCompleted;
+                    completedCycles++;
 
-            return true;  // Cycle was executed
+                    Serial.printf("Motor %d: Cycle %d/%d complete, Turns: %.2f, Total: %.2f\n",
+                                 motorId, completedCycles, settings.cyclesPerDay,
+                                 turnsCompleted, totalTurnsToday);
+
+                    state = SCHED_WAITING;
+                    return true;  // Cycle was completed
+                }
+                return false;
         }
 
-        return false;  // No action taken
+        return false;
     }
 
     // Get status as JSON-compatible values
@@ -161,10 +190,19 @@ public:
         targetTpd = settings.turnsPerDay;
     }
 
+    // Check if motor is actively rotating right now
+    bool isMotorActive() {
+        return state == SCHED_ROTATING;
+    }
+
     // Get time until next cycle in seconds
     unsigned long getTimeUntilNextCycle() {
         if (!isRunning || !settings.enabled) {
             return 0;
+        }
+
+        if (state == SCHED_ROTATING) {
+            return 0;  // Currently rotating
         }
 
         unsigned long elapsed = millis() - lastCycleTime;

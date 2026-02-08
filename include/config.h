@@ -44,8 +44,9 @@
 // ============================================
 // Stepper Motor Constants (28BYJ-48)
 // ============================================
-#define STEPS_PER_REVOLUTION 2048  // Full steps with gear reduction
-#define STEP_DELAY_MS 2            // Delay between steps (speed control)
+#define STEPS_PER_REVOLUTION 2038  // Full steps (gear ratio 63.68395:1)
+#define HALF_STEPS_PER_REVOLUTION 4076  // Half steps per revolution
+#define STEP_DELAY_MS 2            // Delay between steps (~7 RPM, max safe ~15 RPM)
 
 // ============================================
 // Default Motor Settings

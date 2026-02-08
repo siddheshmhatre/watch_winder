@@ -83,6 +83,10 @@ void loop() {
     // Handle web requests
     server.handleClient();
 
+    // Update motors directly (for test mode)
+    motor1.update();
+    motor2.update();
+
     // Update schedulers (non-blocking)
     scheduler1.update();
     scheduler2.update();
@@ -354,12 +358,14 @@ void handleTestMotor() {
     Serial.printf("Testing motor %d, direction %d, duration %d sec\n",
                   motor, direction, duration);
 
+    // Start motor rotation (non-blocking) - motor will run in main loop
     if (motor == 1) {
-        motor1.rotateForDuration(duration, (Direction)direction);
+        motor1.startRotation(duration, (Direction)direction);
     } else if (motor == 2) {
-        motor2.rotateForDuration(duration, (Direction)direction);
+        motor2.startRotation(duration, (Direction)direction);
     }
 
+    // Send response immediately - motor runs in background
     server.send(200, "application/json", "{\"success\":true}");
 }
 
